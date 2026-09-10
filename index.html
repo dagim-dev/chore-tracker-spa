@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roommate Chore Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🧹 Roommate Chore Tracker</h1>
+    </header>
+
+    <section class="filter-bar">
+      <label for="filterRoommate">Filter by roommate:</label>
+      <select id="filterRoommate">
+        <option value="all">All Roommates</option>
+        <option value="Alex">Alex</option>
+        <option value="Jordan">Jordan</option>
+        <option value="Sam">Sam</option>
+        <option value="Taylor">Taylor</option>
+      </select>
+    </section>
+
+    <section class="admin-login">
+      <button type="button" id="adminLoginBtn">🔒 Admin Login</button>
+      <div id="loginWidget" hidden>
+        <input type="password" id="adminPinInput" placeholder="Enter PIN" autocomplete="off">
+        <button type="button" id="adminSubmitBtn">Submit</button>
+      </div>
+    </section>
+
+    <section id="adminPanel" hidden>
+      <h2>Admin: Add New Chore</h2>
+      <form id="addChoreForm">
+        <input type="text" id="choreDescription" placeholder="e.g. Deep clean the fridge" required>
+
+        <select id="choreCategory" required>
+          <option value="" disabled selected>Select Category</option>
+          <option value="Kitchen">Kitchen</option>
+          <option value="Common Room">Common Room</option>
+          <option value="Bathroom">Bathroom</option>
+        </select>
+
+        <select id="choreAssignee" required>
+          <option value="" disabled selected>Assign Roommate</option>
+          <option value="Alex">Alex</option>
+          <option value="Jordan">Jordan</option>
+          <option value="Sam">Sam</option>
+          <option value="Taylor">Taylor</option>
+        </select>
+
+        <button type="submit">Add Chore</button>
+      </form>
+    </section>
+
+    <section id="choreListSection">
+      <h2>Chores</h2>
+      <div id="choreList"></div>
+    </section>
+  </div>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
