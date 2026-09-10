@@ -502,6 +502,11 @@ button:hover {
   color: #4a235a;
 }
 
+.category-badge.other {
+  background: #f0e6d2;
+  color: #6b5b3e;
+}
+
 .chore-card.admin-view {
   padding-right: 3.5rem;
 }

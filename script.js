@@ -4,7 +4,7 @@ import { firebaseConfig, HOUSEHOLD_ID } from "./firebase-config.js";
 
 const ADMIN_PIN = "DG1234";
 const ROOMMATES = ["Dagi", "Issac", "Dhruv", "Moutasim"];
-const CATEGORIES = ["Kitchen", "Common Room", "Bathroom"];
+const CATEGORIES = ["Kitchen", "Common Room", "Bathroom", "Other"];
 const STORAGE_KEY = "choreTrackerData";
 
 let chores = [];
@@ -345,6 +345,7 @@ function getCategoryClass(category) {
   if (category === "Kitchen") return "kitchen";
   if (category === "Common Room") return "common-room";
   if (category === "Bathroom") return "bathroom";
+  if (category === "Other") return "other";
   return "";
 }
 
