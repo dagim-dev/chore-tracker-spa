@@ -12,29 +12,34 @@
       <h1>🧹 Roommate Chore Tracker</h1>
     </header>
 
-    <section class="filter-bar">
-      <label for="filterRoommate">Filter by roommate:</label>
-      <select id="filterRoommate">
-        <option value="all">All Roommates</option>
-        <option value="Alex">Alex</option>
-        <option value="Jordan">Jordan</option>
-        <option value="Sam">Sam</option>
-        <option value="Taylor">Taylor</option>
-      </select>
+    <section id="leaderboard" class="leaderboard" aria-label="Roommate leaderboard"></section>
+
+    <nav id="filterNav" class="filter-nav" aria-label="Filter chores"></nav>
+
+    <section id="suggestionsSection" class="suggestions-section">
+      <h2>Chore Suggestions</h2>
+      <p class="suggestions-note">Suggest a chore for the house. Suggestions stay here until someone removes them or admin adds one to the board.</p>
+      <form id="suggestionForm" class="suggestion-form">
+        <input type="text" id="suggestionInput" placeholder="e.g. Deep clean the oven" required>
+        <button type="submit">Suggest</button>
+      </form>
+      <div id="suggestionList"></div>
     </section>
 
-    <section class="admin-login">
-      <button type="button" id="adminLoginBtn">🔒 Admin Login</button>
-      <div id="loginWidget" hidden>
+    <section class="admin-controls">
+      <button type="button" id="adminModeBtn" class="admin-mode-btn" aria-pressed="false">
+        AM
+      </button>
+      <div id="loginWidget" class="login-widget" hidden>
         <input type="password" id="adminPinInput" placeholder="Enter PIN" autocomplete="off">
-        <button type="button" id="adminSubmitBtn">Submit</button>
+        <button type="button" id="adminSubmitBtn">Unlock</button>
       </div>
     </section>
 
-    <section id="adminPanel" hidden>
-      <h2>Admin: Add New Chore</h2>
+    <section id="adminPanel" class="admin-panel" hidden>
+      <h2>Add New Chore</h2>
       <form id="addChoreForm">
-        <input type="text" id="choreDescription" placeholder="e.g. Deep clean the fridge" required>
+        <input type="text" id="choreDescription" placeholder="e.g. Take out the recycling" required>
 
         <select id="choreCategory" required>
           <option value="" disabled selected>Select Category</option>
@@ -45,18 +50,14 @@
 
         <select id="choreAssignee" required>
           <option value="" disabled selected>Assign Roommate</option>
-          <option value="Alex">Alex</option>
-          <option value="Jordan">Jordan</option>
-          <option value="Sam">Sam</option>
-          <option value="Taylor">Taylor</option>
         </select>
 
         <button type="submit">Add Chore</button>
       </form>
     </section>
 
-    <section id="choreListSection">
-      <h2>Chores</h2>
+    <section id="choreListSection" class="chore-board">
+      <h2>Live Chore Board</h2>
       <div id="choreList"></div>
     </section>
   </div>

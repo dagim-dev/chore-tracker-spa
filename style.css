@@ -7,38 +7,275 @@
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background: #f4f6f8;
+  background: #eef1f5;
   color: #1a1a2e;
   line-height: 1.5;
 }
 
 .container {
-  max-width: 600px;
+  max-width: 640px;
   margin: 0 auto;
   padding: 1rem;
 }
 
 header {
   text-align: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 header h1 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.4rem;
 }
 
-.filter-bar,
-.admin-login {
+/* --- Leaderboard --- */
+
+.leaderboard {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.leaderboard-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 0.85rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
   display: flex;
   flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.35rem;
+}
+
+.leaderboard-top {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.leaderboard-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.progress-ring {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+
+.progress-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ring-bg {
+  fill: none;
+  stroke: #e8ecf0;
+  stroke-width: 3.2;
+}
+
+.ring-fill {
+  fill: none;
+  stroke: #4a6cf7;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.35s ease;
+}
+
+.leaderboard-card.complete .ring-fill {
+  stroke: #28a745;
+}
+
+.ring-percent {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #444;
+}
+
+.leaderboard-tally {
+  font-size: 0.78rem;
+  color: #666;
+}
+
+/* --- Filter Nav --- */
+
+.filter-nav {
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
-.filter-bar label {
-  font-weight: 600;
+.filter-btn {
+  min-height: 44px;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 2px solid #d0d7de;
+  background: #fff;
+  color: #333;
   font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.filter-btn:hover {
+  border-color: #4a6cf7;
+  color: #4a6cf7;
+}
+
+.filter-btn.active {
+  background: #4a6cf7;
+  border-color: #4a6cf7;
+  color: #fff;
+}
+
+/* --- Suggestions --- */
+
+.suggestions-section {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
+.suggestions-section h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.suggestions-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  color: #666;
+}
+
+.suggestion-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.suggestion-form input[type="text"] {
+  width: 100%;
+}
+
+.suggestion-form button[type="submit"] {
+  background: #17a2b8;
+}
+
+.suggestion-form button[type="submit"]:hover {
+  background: #138496;
+}
+
+#suggestionList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.suggestion-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  background: #f8f9fb;
+  border-radius: 10px;
+  border: 1px solid #e3e8ee;
+}
+
+.suggestion-text {
+  flex: 1;
+  font-size: 0.92rem;
+  word-break: break-word;
+}
+
+.suggestion-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.suggestion-delete-btn,
+.suggestion-use-btn {
+  min-height: 36px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  border-radius: 8px;
+}
+
+.suggestion-delete-btn {
+  background: transparent;
+  color: #dc3545;
+  border: 1px solid #dc3545;
+}
+
+.suggestion-delete-btn:hover {
+  background: #fde8e8;
+}
+
+.suggestion-use-btn {
+  background: #28a745;
+}
+
+.suggestion-use-btn:hover {
+  background: #218838;
+}
+
+/* --- Admin Controls --- */
+
+.admin-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.admin-mode-btn {
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 2px solid #6c757d;
+  background: #fff;
+  color: #6c757d;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.admin-mode-btn:hover {
+  border-color: #495057;
+  color: #495057;
+}
+
+.admin-mode-btn.active {
+  background: #6c757d;
+  border-color: #6c757d;
+  color: #fff;
+}
+
+.login-widget {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.login-widget[hidden] {
+  display: none !important;
 }
 
 select,
@@ -72,41 +309,38 @@ button:hover {
   background: #3a5ce5;
 }
 
-#adminLoginBtn {
-  align-self: flex-start;
+#adminSubmitBtn {
   background: #6c757d;
 }
 
-#adminLoginBtn:hover {
+#adminSubmitBtn:hover {
   background: #5a6268;
 }
 
-#loginWidget {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+.login-widget input[type="password"] {
+  flex: 1;
+  min-width: 120px;
 }
 
-#loginWidget[hidden] {
-  display: none !important;
-}
+/* --- Admin Panel --- */
 
-#adminPanel {
+.admin-panel {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 1rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  margin-bottom: 1.25rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  border: 2px dashed #6c757d;
 }
 
-#adminPanel[hidden],
+.admin-panel[hidden],
 .delete-btn[hidden] {
   display: none !important;
 }
 
-#adminPanel h2 {
-  margin-top: 0;
-  font-size: 1.1rem;
+.admin-panel h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
 }
 
 #addChoreForm {
@@ -123,9 +357,11 @@ button:hover {
   background: #218838;
 }
 
-#choreListSection h2 {
-  font-size: 1.1rem;
-  margin-bottom: 0.75rem;
+/* --- Chore Board --- */
+
+.chore-board h2 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
 }
 
 #choreList {
@@ -135,55 +371,88 @@ button:hover {
 }
 
 .chore-card {
+  position: relative;
   background: #fff;
-  border-radius: 12px;
-  padding: 1rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border-left: 4px solid #4a6cf7;
+  border-radius: 14px;
+  padding: 1rem 1rem 1rem 0.75rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  border: 2px solid transparent;
+  transition: background 0.2s, border-color 0.2s;
 }
 
 .chore-card.completed {
-  opacity: 0.65;
-  border-left-color: #28a745;
+  background: #e8f5e9;
+  border-color: #28a745;
 }
 
 .chore-card.completed .chore-description {
   text-decoration: line-through;
+  color: #2e7d32;
 }
 
-.chore-card.in-progress {
-  border-left-color: #ffc107;
-}
-
-.chore-header {
+.status-toggle {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 2px solid #ccc;
+  background: #fff;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  padding: 0;
+}
+
+.status-toggle:hover {
+  border-color: #28a745;
+  background: #f0fff4;
+}
+
+.chore-card.completed .status-toggle {
+  background: #28a745;
+  border-color: #28a745;
+  color: #fff;
+}
+
+.chore-body {
+  flex: 1;
+  min-width: 0;
 }
 
 .chore-description {
   font-weight: 600;
-  flex: 1;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.chore-assignee {
+  font-size: 0.78rem;
+  color: #777;
+  margin-top: 0.15rem;
 }
 
 .category-badge {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
   display: inline-block;
   padding: 0.15rem 0.5rem;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  white-space: nowrap;
 }
 
 .category-badge.kitchen {
-  background: #fff3cd;
-  color: #856404;
+  background: #d4edda;
+  color: #155724;
 }
 
 .category-badge.common-room {
@@ -192,48 +461,31 @@ button:hover {
 }
 
 .category-badge.bathroom {
-  background: #d1ecf1;
-  color: #0c5460;
+  background: #e2d5f5;
+  color: #4a235a;
 }
 
-.chore-meta {
-  font-size: 0.85rem;
-  color: #666;
-}
-
-.chore-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.toggle-btn {
-  background: #17a2b8;
-  flex: 1;
-  min-width: 140px;
-}
-
-.toggle-btn:hover {
-  background: #138496;
-}
-
-.chore-card.completed .toggle-btn {
-  background: #ffc107;
-  color: #212529;
-}
-
-.chore-card.completed .toggle-btn:hover {
-  background: #e0a800;
+.chore-card.admin-view {
+  padding-right: 3.5rem;
 }
 
 .delete-btn {
-  background: #dc3545;
-  flex: 0 0 auto;
-  min-width: 80px;
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  width: 36px;
+  height: 36px;
+  min-height: unset;
+  padding: 0;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  font-size: 1.1rem;
+  line-height: 1;
 }
 
 .delete-btn:hover {
-  background: #c82333;
+  background: #fde8e8;
 }
 
 .empty-message {
@@ -243,33 +495,15 @@ button:hover {
   font-style: italic;
 }
 
+@media (min-width: 540px) {
+  .leaderboard {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
 @media (min-width: 768px) {
   header h1 {
-    font-size: 1.75rem;
-  }
-
-  .filter-bar {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .filter-bar select {
-    flex: 1;
-  }
-
-  .admin-login {
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-
-  #loginWidget {
-    flex-direction: row;
-    flex: 1;
-  }
-
-  #loginWidget input[type="password"] {
-    flex: 1;
+    font-size: 1.65rem;
   }
 
   #addChoreForm {
@@ -285,6 +519,18 @@ button:hover {
   }
 
   #addChoreForm button[type="submit"] {
+    flex: 0 0 auto;
+  }
+
+  .suggestion-form {
+    flex-direction: row;
+  }
+
+  .suggestion-form input[type="text"] {
+    flex: 1;
+  }
+
+  .suggestion-form button[type="submit"] {
     flex: 0 0 auto;
   }
 }
