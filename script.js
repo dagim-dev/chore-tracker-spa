@@ -1,3 +1,7 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+import { firebaseConfig, HOUSEHOLD_ID } from "./firebase-config.js";
+
 const ADMIN_PIN = "DG1234";
 const ROOMMATES = ["Dagi", "Issac", "Dhruv", "Moutasim"];
 const CATEGORIES = ["Kitchen", "Common Room", "Bathroom"];
@@ -7,28 +11,74 @@ let chores = [];
 let suggestions = [];
 let isAdmin = false;
 let activeFilter = "all";
+let householdRef = null;
 
-function saveData() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ chores, suggestions }));
+function isFirebaseConfigured() {
+  return firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("YOUR_");
 }
 
-function loadChores() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    chores = [];
-    suggestions = [];
-    return;
-  }
+function showSyncBanner(message, type = "error") {
+  const banner = document.getElementById("syncBanner");
+  banner.textContent = message;
+  banner.className = `sync-banner ${type}`;
+  banner.hidden = false;
+}
 
+function hideSyncBanner() {
+  document.getElementById("syncBanner").hidden = true;
+}
+
+async function saveData() {
+  if (!householdRef) return;
+  await setDoc(householdRef, { chores, suggestions });
+}
+
+function parseLocalData(raw) {
   const data = JSON.parse(raw);
   if (Array.isArray(data)) {
-    chores = data;
-    suggestions = [];
+    return { chores: data, suggestions: [] };
+  }
+  return {
+    chores: data.chores || [],
+    suggestions: data.suggestions || []
+  };
+}
+
+async function migrateLocalStorageIfNeeded() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+
+  const snap = await getDoc(householdRef);
+  const existing = snap.data();
+  const hasFirestoreData =
+    (existing?.chores?.length > 0) || (existing?.suggestions?.length > 0);
+
+  if (hasFirestoreData) {
+    localStorage.removeItem(STORAGE_KEY);
     return;
   }
 
-  chores = data.chores || [];
-  suggestions = data.suggestions || [];
+  const local = parseLocalData(raw);
+  if (local.chores.length === 0 && local.suggestions.length === 0) return;
+
+  await setDoc(householdRef, local);
+  localStorage.removeItem(STORAGE_KEY);
+}
+
+function subscribeToData() {
+  onSnapshot(
+    householdRef,
+    (snapshot) => {
+      const data = snapshot.data() || { chores: [], suggestions: [] };
+      chores = data.chores || [];
+      suggestions = data.suggestions || [];
+      hideSyncBanner();
+      renderAll();
+    },
+    () => {
+      showSyncBanner("Could not load data. Check Firebase config and Firestore rules.");
+    }
+  );
 }
 
 function getRoommateStats(name) {
@@ -160,29 +210,36 @@ function attemptLogin(inputPin) {
   }
 }
 
-function addSuggestion(text) {
-  suggestions.push({
-    id: crypto.randomUUID(),
-    text
-  });
-  saveData();
-  renderSuggestions();
+async function addSuggestion(text) {
+  const suggestion = { id: crypto.randomUUID(), text };
+  suggestions.push(suggestion);
+  try {
+    await saveData();
+  } catch {
+    suggestions = suggestions.filter(item => item.id !== suggestion.id);
+    showSyncBanner("Could not save suggestion. Try again.");
+  }
 }
 
-function deleteSuggestion(id) {
+async function deleteSuggestion(id) {
+  const previous = suggestions;
   suggestions = suggestions.filter(suggestion => suggestion.id !== id);
-  saveData();
-  renderSuggestions();
+  try {
+    await saveData();
+  } catch {
+    suggestions = previous;
+    showSyncBanner("Could not delete suggestion. Try again.");
+  }
 }
 
-function useSuggestion(id) {
+async function useSuggestion(id) {
   if (!isAdmin) return;
 
   const suggestion = suggestions.find(item => item.id === id);
   if (!suggestion) return;
 
   document.getElementById("choreDescription").value = suggestion.text;
-  deleteSuggestion(id);
+  await deleteSuggestion(id);
   document.getElementById("adminPanel").scrollIntoView({ behavior: "smooth", block: "start" });
   document.getElementById("choreDescription").focus();
 }
@@ -230,32 +287,53 @@ function renderSuggestions() {
   });
 }
 
-function addChore(description, category, assignee) {
+async function addChore(description, category, assignee) {
   if (!isAdmin) return;
-  chores.push({
+
+  const chore = {
     id: crypto.randomUUID(),
     description,
     category,
     assignee,
     status: "in-progress"
-  });
-  saveData();
-  renderAll();
+  };
+  chores.push(chore);
+
+  try {
+    await saveData();
+  } catch {
+    chores = chores.filter(item => item.id !== chore.id);
+    showSyncBanner("Could not save chore. Try again.");
+  }
 }
 
-function deleteChore(id) {
+async function deleteChore(id) {
   if (!isAdmin) return;
+
+  const previous = chores;
   chores = chores.filter(chore => chore.id !== id);
-  saveData();
-  renderAll();
+
+  try {
+    await saveData();
+  } catch {
+    chores = previous;
+    showSyncBanner("Could not delete chore. Try again.");
+  }
 }
 
-function setChoreStatus(id, status) {
+async function setChoreStatus(id, status) {
   const chore = chores.find(c => c.id === id);
   if (!chore || chore.status === status) return;
+
+  const previousStatus = chore.status;
   chore.status = status;
-  saveData();
-  renderAll();
+
+  try {
+    await saveData();
+  } catch {
+    chore.status = previousStatus;
+    showSyncBanner("Could not update chore. Try again.");
+  }
 }
 
 function getFilteredChores(filterValue) {
@@ -354,11 +432,28 @@ function renderAll() {
   renderChores();
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  loadChores();
+document.addEventListener("DOMContentLoaded", async () => {
+  if (!isFirebaseConfigured()) {
+    showSyncBanner("Add your Firebase config to firebase-config.js");
+    return;
+  }
+
+  showSyncBanner("Connecting…", "loading");
+
+  try {
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    householdRef = doc(db, "households", HOUSEHOLD_ID);
+
+    await migrateLocalStorageIfNeeded();
+    subscribeToData();
+  } catch {
+    showSyncBanner("Firebase failed to initialize. Check firebase-config.js");
+    return;
+  }
+
   populateAssigneeSelect();
   renderFilterNav();
-  renderAll();
 
   document.getElementById("adminModeBtn").addEventListener("click", () => {
     if (isAdmin) {
@@ -384,7 +479,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  document.getElementById("addChoreForm").addEventListener("submit", (event) => {
+  document.getElementById("addChoreForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const description = document.getElementById("choreDescription").value.trim();
     const category = document.getElementById("choreCategory").value;
@@ -392,17 +487,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!description || !category || !assignee) return;
 
-    addChore(description, category, assignee);
+    await addChore(description, category, assignee);
     event.target.reset();
   });
 
-  document.getElementById("suggestionForm").addEventListener("submit", (event) => {
+  document.getElementById("suggestionForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const input = document.getElementById("suggestionInput");
     const text = input.value.trim();
     if (!text) return;
 
-    addSuggestion(text);
+    await addSuggestion(text);
     input.value = "";
   });
 });

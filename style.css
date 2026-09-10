@@ -12,6 +12,27 @@ body {
   line-height: 1.5;
 }
 
+.sync-banner {
+  padding: 0.65rem 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.sync-banner[hidden] {
+  display: none !important;
+}
+
+.sync-banner.error {
+  background: #fde8e8;
+  color: #842029;
+}
+
+.sync-banner.loading {
+  background: #fff3cd;
+  color: #664d03;
+}
+
 .container {
   max-width: 640px;
   margin: 0 auto;
