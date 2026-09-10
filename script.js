@@ -250,10 +250,10 @@ function deleteChore(id) {
   renderAll();
 }
 
-function toggleStatus(id) {
+function setChoreStatus(id, status) {
   const chore = chores.find(c => c.id === id);
-  if (!chore) return;
-  chore.status = chore.status === "completed" ? "in-progress" : "completed";
+  if (!chore || chore.status === status) return;
+  chore.status = status;
   saveData();
   renderAll();
 }
@@ -292,13 +292,6 @@ function renderChores() {
     badge.className = `category-badge ${getCategoryClass(chore.category)}`;
     badge.textContent = chore.category;
 
-    const toggleBtn = document.createElement("button");
-    toggleBtn.type = "button";
-    toggleBtn.className = "status-toggle";
-    toggleBtn.setAttribute("aria-label", chore.status === "completed" ? "Mark in progress" : "Mark complete");
-    toggleBtn.textContent = chore.status === "completed" ? "✓" : "";
-    toggleBtn.addEventListener("click", () => toggleStatus(chore.id));
-
     const body = document.createElement("div");
     body.className = "chore-body";
 
@@ -310,12 +303,34 @@ function renderChores() {
     assignee.className = "chore-assignee";
     assignee.textContent = chore.assignee;
 
+    const statusControls = document.createElement("div");
+    statusControls.className = "status-controls";
+    statusControls.setAttribute("role", "group");
+    statusControls.setAttribute("aria-label", "Chore status");
+
+    const inProgressBtn = document.createElement("button");
+    inProgressBtn.type = "button";
+    inProgressBtn.className = "status-btn";
+    inProgressBtn.textContent = "In Progress";
+    inProgressBtn.classList.toggle("active", chore.status === "in-progress");
+    inProgressBtn.addEventListener("click", () => setChoreStatus(chore.id, "in-progress"));
+
+    const doneBtn = document.createElement("button");
+    doneBtn.type = "button";
+    doneBtn.className = "status-btn";
+    doneBtn.textContent = "Done";
+    doneBtn.classList.toggle("active", chore.status === "completed");
+    doneBtn.addEventListener("click", () => setChoreStatus(chore.id, "completed"));
+
+    statusControls.appendChild(inProgressBtn);
+    statusControls.appendChild(doneBtn);
+
     body.appendChild(description);
     if (activeFilter === "all") {
       body.appendChild(assignee);
     }
+    body.appendChild(statusControls);
 
-    card.appendChild(toggleBtn);
     card.appendChild(body);
     card.appendChild(badge);
 
