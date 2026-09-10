@@ -217,7 +217,7 @@ async function addSuggestion(text) {
     await saveData();
   } catch {
     suggestions = suggestions.filter(item => item.id !== suggestion.id);
-    showSyncBanner("Could not save suggestion. Try again.");
+    showSyncBanner("Could not save. Try again.");
   }
 }
 
@@ -228,7 +228,7 @@ async function deleteSuggestion(id) {
     await saveData();
   } catch {
     suggestions = previous;
-    showSyncBanner("Could not delete suggestion. Try again.");
+    showSyncBanner("Could not delete. Try again.");
   }
 }
 
@@ -248,7 +248,7 @@ function renderSuggestions() {
   const list = document.getElementById("suggestionList");
 
   if (suggestions.length === 0) {
-    list.innerHTML = '<p class="empty-message">No suggestions yet.</p>';
+    list.innerHTML = '<p class="empty-message">Nothing added yet.</p>';
     return;
   }
 
