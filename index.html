@@ -18,27 +18,9 @@
 
     <nav id="filterNav" class="filter-nav" aria-label="Filter chores"></nav>
 
-    <section id="suggestionsSection" class="suggestions-section">
-      <h2>Chore Additions</h2>
-      <form id="suggestionForm" class="suggestion-form">
-        <input type="text" id="suggestionInput" placeholder="e.g. Deep clean the oven" required>
-        <button type="submit">Add</button>
-      </form>
-      <div id="suggestionList"></div>
-    </section>
-
-    <section class="admin-controls">
-      <button type="button" id="adminModeBtn" class="admin-mode-btn" aria-pressed="false">
-        AM
-      </button>
-      <div id="loginWidget" class="login-widget" hidden>
-        <input type="password" id="adminPinInput" placeholder="Enter PIN" autocomplete="off">
-        <button type="button" id="adminSubmitBtn">Unlock</button>
-      </div>
-    </section>
-
-    <section id="adminPanel" class="admin-panel" hidden>
+    <section class="add-chore-panel">
       <h2>Add New Chore</h2>
+      <p class="assignment-note">New chores are assigned randomly so everyone gets a fair turn before anyone is picked again.</p>
       <form id="addChoreForm">
         <input type="text" id="choreDescription" placeholder="e.g. Take out the recycling" required>
 
@@ -48,10 +30,6 @@
           <option value="Common Room">Common Room</option>
           <option value="Bathroom">Bathroom</option>
           <option value="Other">Other</option>
-        </select>
-
-        <select id="choreAssignee" required>
-          <option value="" disabled selected>Assign Roommate</option>
         </select>
 
         <button type="submit">Add Chore</button>

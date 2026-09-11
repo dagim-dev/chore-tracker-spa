@@ -2,14 +2,12 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebas
 import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 import { firebaseConfig, HOUSEHOLD_ID } from "./firebase-config.js";
 
-const ADMIN_PIN = "DG1234";
 const ROOMMATES = ["Dagi", "Issac", "Dhruv", "Moutasim"];
 const CATEGORIES = ["Kitchen", "Common Room", "Bathroom", "Other"];
 const STORAGE_KEY = "choreTrackerData";
+const ASSIGNMENT_CYCLE_KEY = "choreTrackerAssignmentCycle";
 
 let chores = [];
-let suggestions = [];
-let isAdmin = false;
 let activeFilter = "all";
 let householdRef = null;
 
@@ -30,7 +28,58 @@ function hideSyncBanner() {
 
 async function saveData() {
   if (!householdRef) return;
-  await setDoc(householdRef, { chores, suggestions });
+  await setDoc(householdRef, { chores });
+}
+
+function loadAssignmentCycle() {
+  const raw = localStorage.getItem(ASSIGNMENT_CYCLE_KEY);
+  if (!raw) {
+    return { cycleId: 1, eligible: [...ROOMMATES] };
+  }
+
+  try {
+    const data = JSON.parse(raw);
+    return {
+      cycleId: data.cycleId ?? 1,
+      eligible: Array.isArray(data.eligible) ? data.eligible : [...ROOMMATES]
+    };
+  } catch {
+    return { cycleId: 1, eligible: [...ROOMMATES] };
+  }
+}
+
+function saveAssignmentCycle(state) {
+  localStorage.setItem(ASSIGNMENT_CYCLE_KEY, JSON.stringify(state));
+}
+
+function syncEligibleWithRoommates(state) {
+  let eligible = state.eligible.filter(name => ROOMMATES.includes(name));
+
+  if (eligible.length > 0) {
+    ROOMMATES.forEach(name => {
+      if (!eligible.includes(name)) {
+        eligible.push(name);
+      }
+    });
+  }
+
+  return { ...state, eligible };
+}
+
+function pickRandomAssignee() {
+  let state = syncEligibleWithRoommates(loadAssignmentCycle());
+
+  if (state.eligible.length === 0) {
+    state.cycleId += 1;
+    state.eligible = [...ROOMMATES];
+  }
+
+  const index = Math.floor(Math.random() * state.eligible.length);
+  const assignee = state.eligible[index];
+  state.eligible.splice(index, 1);
+
+  saveAssignmentCycle(state);
+  return assignee;
 }
 
 function parseLocalData(raw) {
@@ -50,8 +99,7 @@ async function migrateLocalStorageIfNeeded() {
 
   const snap = await getDoc(householdRef);
   const existing = snap.data();
-  const hasFirestoreData =
-    (existing?.chores?.length > 0) || (existing?.suggestions?.length > 0);
+  const hasFirestoreData = existing?.chores?.length > 0;
 
   if (hasFirestoreData) {
     localStorage.removeItem(STORAGE_KEY);
@@ -59,9 +107,9 @@ async function migrateLocalStorageIfNeeded() {
   }
 
   const local = parseLocalData(raw);
-  if (local.chores.length === 0 && local.suggestions.length === 0) return;
+  if (local.chores.length === 0) return;
 
-  await setDoc(householdRef, local);
+  await setDoc(householdRef, { chores: local.chores });
   localStorage.removeItem(STORAGE_KEY);
 }
 
@@ -69,9 +117,8 @@ function subscribeToData() {
   onSnapshot(
     householdRef,
     (snapshot) => {
-      const data = snapshot.data() || { chores: [], suggestions: [] };
+      const data = snapshot.data() || { chores: [] };
       chores = data.chores || [];
-      suggestions = data.suggestions || [];
       hideSyncBanner();
       renderAll();
     },
@@ -174,121 +221,8 @@ function setFilter(filterValue) {
   renderChores();
 }
 
-function populateAssigneeSelect() {
-  const select = document.getElementById("choreAssignee");
-  select.innerHTML = '<option value="" disabled selected>Assign Roommate</option>';
-
-  ROOMMATES.forEach(name => {
-    const option = document.createElement("option");
-    option.value = name;
-    option.textContent = name;
-    select.appendChild(option);
-  });
-}
-
-function setAdminUI(enabled) {
-  isAdmin = enabled;
-
-  const adminBtn = document.getElementById("adminModeBtn");
-  const adminPanel = document.getElementById("adminPanel");
-  const loginWidget = document.getElementById("loginWidget");
-
-  adminBtn.classList.toggle("active", enabled);
-  adminBtn.setAttribute("aria-pressed", String(enabled));
-  adminPanel.hidden = !enabled;
-  loginWidget.hidden = true;
-
-  renderSuggestions();
-  renderChores();
-}
-
-function attemptLogin(inputPin) {
-  if (inputPin === ADMIN_PIN) {
-    setAdminUI(true);
-  } else {
-    alert("Incorrect PIN.");
-  }
-}
-
-async function addSuggestion(text) {
-  const suggestion = { id: crypto.randomUUID(), text };
-  suggestions.push(suggestion);
-  try {
-    await saveData();
-  } catch {
-    suggestions = suggestions.filter(item => item.id !== suggestion.id);
-    showSyncBanner("Could not save. Try again.");
-  }
-}
-
-async function deleteSuggestion(id) {
-  const previous = suggestions;
-  suggestions = suggestions.filter(suggestion => suggestion.id !== id);
-  try {
-    await saveData();
-  } catch {
-    suggestions = previous;
-    showSyncBanner("Could not delete. Try again.");
-  }
-}
-
-async function useSuggestion(id) {
-  if (!isAdmin) return;
-
-  const suggestion = suggestions.find(item => item.id === id);
-  if (!suggestion) return;
-
-  document.getElementById("choreDescription").value = suggestion.text;
-  await deleteSuggestion(id);
-  document.getElementById("adminPanel").scrollIntoView({ behavior: "smooth", block: "start" });
-  document.getElementById("choreDescription").focus();
-}
-
-function renderSuggestions() {
-  const list = document.getElementById("suggestionList");
-
-  if (suggestions.length === 0) {
-    list.innerHTML = '<p class="empty-message">Nothing added yet.</p>';
-    return;
-  }
-
-  list.innerHTML = "";
-
-  suggestions.forEach(suggestion => {
-    const card = document.createElement("article");
-    card.className = "suggestion-card";
-
-    const text = document.createElement("p");
-    text.className = "suggestion-text";
-    text.textContent = suggestion.text;
-
-    const actions = document.createElement("div");
-    actions.className = "suggestion-actions";
-
-    if (isAdmin) {
-      const useBtn = document.createElement("button");
-      useBtn.type = "button";
-      useBtn.className = "suggestion-use-btn";
-      useBtn.textContent = "Add to Chores";
-      useBtn.addEventListener("click", () => useSuggestion(suggestion.id));
-      actions.appendChild(useBtn);
-    }
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "suggestion-delete-btn";
-    deleteBtn.textContent = "Delete";
-    deleteBtn.addEventListener("click", () => deleteSuggestion(suggestion.id));
-    actions.appendChild(deleteBtn);
-
-    card.appendChild(text);
-    card.appendChild(actions);
-    list.appendChild(card);
-  });
-}
-
-async function addChore(description, category, assignee) {
-  if (!isAdmin) return;
+async function addChore(description, category) {
+  const assignee = pickRandomAssignee();
 
   const chore = {
     id: crypto.randomUUID(),
@@ -307,17 +241,18 @@ async function addChore(description, category, assignee) {
   }
 }
 
-async function deleteChore(id) {
-  if (!isAdmin) return;
+async function removeChore(id) {
+  const chore = chores.find(c => c.id === id);
+  if (!chore || chore.status !== "completed") return;
 
   const previous = chores;
-  chores = chores.filter(chore => chore.id !== id);
+  chores = chores.filter(c => c.id !== id);
 
   try {
     await saveData();
   } catch {
     chores = previous;
-    showSyncBanner("Could not delete chore. Try again.");
+    showSyncBanner("Could not remove chore. Try again.");
   }
 }
 
@@ -363,9 +298,6 @@ function renderChores() {
   filtered.forEach(chore => {
     const card = document.createElement("article");
     card.className = `chore-card ${chore.status}`;
-    if (isAdmin) {
-      card.classList.add("admin-view");
-    }
 
     const badge = document.createElement("span");
     badge.className = `category-badge ${getCategoryClass(chore.category)}`;
@@ -404,6 +336,15 @@ function renderChores() {
     statusControls.appendChild(inProgressBtn);
     statusControls.appendChild(doneBtn);
 
+    if (chore.status === "completed") {
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "remove-btn";
+      removeBtn.textContent = "Remove";
+      removeBtn.addEventListener("click", () => removeChore(chore.id));
+      statusControls.appendChild(removeBtn);
+    }
+
     body.appendChild(description);
     if (activeFilter === "all") {
       body.appendChild(assignee);
@@ -413,23 +354,12 @@ function renderChores() {
     card.appendChild(body);
     card.appendChild(badge);
 
-    if (isAdmin) {
-      const deleteBtn = document.createElement("button");
-      deleteBtn.type = "button";
-      deleteBtn.className = "delete-btn";
-      deleteBtn.setAttribute("aria-label", "Delete chore");
-      deleteBtn.textContent = "❌";
-      deleteBtn.addEventListener("click", () => deleteChore(chore.id));
-      card.appendChild(deleteBtn);
-    }
-
     choreList.appendChild(card);
   });
 }
 
 function renderAll() {
   renderLeaderboard();
-  renderSuggestions();
   renderChores();
 }
 
@@ -447,58 +377,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     householdRef = doc(db, "households", HOUSEHOLD_ID);
 
     await migrateLocalStorageIfNeeded();
+    saveAssignmentCycle(syncEligibleWithRoommates(loadAssignmentCycle()));
     subscribeToData();
   } catch {
     showSyncBanner("Firebase failed to initialize. Check firebase-config.js");
     return;
   }
 
-  populateAssigneeSelect();
   renderFilterNav();
-
-  document.getElementById("adminModeBtn").addEventListener("click", () => {
-    if (isAdmin) {
-      setAdminUI(false);
-      return;
-    }
-
-    const loginWidget = document.getElementById("loginWidget");
-    loginWidget.hidden = !loginWidget.hidden;
-  });
-
-  document.getElementById("adminSubmitBtn").addEventListener("click", () => {
-    const pinInput = document.getElementById("adminPinInput");
-    attemptLogin(pinInput.value);
-    pinInput.value = "";
-  });
-
-  document.getElementById("adminPinInput").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      const pinInput = document.getElementById("adminPinInput");
-      attemptLogin(pinInput.value);
-      pinInput.value = "";
-    }
-  });
 
   document.getElementById("addChoreForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const description = document.getElementById("choreDescription").value.trim();
     const category = document.getElementById("choreCategory").value;
-    const assignee = document.getElementById("choreAssignee").value;
 
-    if (!description || !category || !assignee) return;
+    if (!description || !category) return;
+    if (!CATEGORIES.includes(category)) return;
 
-    await addChore(description, category, assignee);
+    await addChore(description, category);
     event.target.reset();
-  });
-
-  document.getElementById("suggestionForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const input = document.getElementById("suggestionInput");
-    const text = input.value.trim();
-    if (!text) return;
-
-    await addSuggestion(text);
-    input.value = "";
   });
 });
