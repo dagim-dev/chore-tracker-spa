@@ -374,6 +374,29 @@ button:hover {
   margin-top: 0.15rem;
 }
 
+.assignment-pending {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.6rem;
+  margin-top: 0.15rem;
+}
+
+.chore-assignee.pending {
+  margin: 0;
+  color: #b8860b;
+  font-style: italic;
+  font-weight: 600;
+}
+
+.assignment-pending-note {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #888;
+  flex: 1;
+  min-width: 10rem;
+}
+
 .category-badge {
   position: absolute;
   top: 0.6rem;

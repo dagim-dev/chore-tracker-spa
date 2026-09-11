@@ -9,14 +9,17 @@ const SUGGESTED_CHORES = [
   { description: "Take Out Trash (from the house to the outside bin)", category: "Kitchen" },
   { description: "Vacuum the Common Room", category: "Common Room" },
   { description: "Clean Dishes", category: "Kitchen" },
-  { description: "Vacuum Hallway", category: "Other" }
+  { description: "Vacuum Hallway", category: "Other" },
+  { description: "Empty the Vacuum Cleaners", category: "Other" }
 ];
 const STORAGE_KEY = "choreTrackerData";
 const ASSIGNMENT_CYCLE_KEY = "choreTrackerAssignmentCycle";
+const ASSIGNMENT_DELAY_MS = 20 * 60 * 1000;
 
 let chores = [];
 let activeFilter = "all";
 let householdRef = null;
+let assignmentTimerId = null;
 
 function isFirebaseConfigured() {
   return firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("YOUR_");
@@ -120,6 +123,55 @@ async function migrateLocalStorageIfNeeded() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
+function hasPendingAssignments() {
+  return chores.some(chore => !chore.assignee);
+}
+
+function formatAssignmentCountdown(assignAt) {
+  const remaining = Math.max(0, assignAt - Date.now());
+  const minutes = Math.floor(remaining / 60000);
+  const seconds = Math.floor((remaining % 60000) / 1000);
+  return `Assigning in ${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+async function processDueAssignments() {
+  const now = Date.now();
+  const dueChores = chores.filter(chore => !chore.assignee && (chore.assignAt ?? 0) <= now);
+  if (dueChores.length === 0) return;
+
+  const previousStates = dueChores.map(chore => ({
+    chore,
+    assignAt: chore.assignAt
+  }));
+
+  for (const chore of dueChores) {
+    chore.assignee = pickRandomAssignee();
+    delete chore.assignAt;
+  }
+
+  try {
+    await saveData();
+  } catch {
+    for (const { chore, assignAt } of previousStates) {
+      chore.assignee = null;
+      if (assignAt !== undefined) {
+        chore.assignAt = assignAt;
+      }
+    }
+    showSyncBanner("Could not assign chore. Try again.");
+  }
+}
+
+function startAssignmentTimer() {
+  if (assignmentTimerId) clearInterval(assignmentTimerId);
+
+  assignmentTimerId = setInterval(() => {
+    if (!hasPendingAssignments()) return;
+    processDueAssignments();
+    renderChores();
+  }, 1000);
+}
+
 function subscribeToData() {
   onSnapshot(
     householdRef,
@@ -127,6 +179,7 @@ function subscribeToData() {
       const data = snapshot.data() || { chores: [] };
       chores = data.chores || [];
       hideSyncBanner();
+      processDueAssignments();
       renderAll();
     },
     () => {
@@ -136,7 +189,7 @@ function subscribeToData() {
 }
 
 function getRoommateStats(name) {
-  const assigned = chores.filter(chore => chore.assignee === name);
+  const assigned = chores.filter(chore => chore.assignee && chore.assignee === name);
   const total = assigned.length;
   const done = assigned.filter(chore => chore.status === "completed").length;
   const percent = total === 0 ? 0 : Math.round((done / total) * 100);
@@ -229,13 +282,12 @@ function setFilter(filterValue) {
 }
 
 async function addChore(description, category) {
-  const assignee = pickRandomAssignee();
-
   const chore = {
     id: crypto.randomUUID(),
     description,
     category,
-    assignee,
+    assignee: null,
+    assignAt: Date.now() + ASSIGNMENT_DELAY_MS,
     status: "in-progress"
   };
   chores.push(chore);
@@ -317,9 +369,26 @@ function renderChores() {
     description.className = "chore-description";
     description.textContent = chore.description;
 
-    const assignee = document.createElement("p");
-    assignee.className = "chore-assignee";
-    assignee.textContent = chore.assignee;
+    let assignee;
+    if (chore.assignee) {
+      assignee = document.createElement("p");
+      assignee.className = "chore-assignee";
+      assignee.textContent = chore.assignee;
+    } else {
+      assignee = document.createElement("div");
+      assignee.className = "assignment-pending";
+
+      const timer = document.createElement("p");
+      timer.className = "chore-assignee pending";
+      timer.textContent = formatAssignmentCountdown(chore.assignAt ?? Date.now() + ASSIGNMENT_DELAY_MS);
+
+      const note = document.createElement("p");
+      note.className = "assignment-pending-note";
+      note.textContent = "A random housemate will be assigned a chore at the end of the timer.";
+
+      assignee.appendChild(timer);
+      assignee.appendChild(note);
+    }
 
     const statusControls = document.createElement("div");
     statusControls.className = "status-controls";
@@ -413,6 +482,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await migrateLocalStorageIfNeeded();
     saveAssignmentCycle(syncEligibleWithRoommates(loadAssignmentCycle()));
     subscribeToData();
+    startAssignmentTimer();
   } catch {
     showSyncBanner("Firebase failed to initialize. Check firebase-config.js");
     return;
