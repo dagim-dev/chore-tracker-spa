@@ -4,6 +4,13 @@ import { firebaseConfig, HOUSEHOLD_ID } from "./firebase-config.js";
 
 const ROOMMATES = ["Dagi", "Issac", "Dhruv", "Moutasim"];
 const CATEGORIES = ["Kitchen", "Common Room", "Bathroom", "Other"];
+const SUGGESTED_CHORES = [
+  { description: "Empty Dehumidifier", category: "Kitchen" },
+  { description: "Take Out Trash (from the house to the outside bin)", category: "Kitchen" },
+  { description: "Vacuum the Common Room", category: "Common Room" },
+  { description: "Clean Dishes", category: "Kitchen" },
+  { description: "Vacuum Hallway", category: "Other" }
+];
 const STORAGE_KEY = "choreTrackerData";
 const ASSIGNMENT_CYCLE_KEY = "choreTrackerAssignmentCycle";
 
@@ -363,6 +370,33 @@ function renderAll() {
   renderChores();
 }
 
+function renderSuggestedChores() {
+  const container = document.getElementById("suggestedChores");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  const label = document.createElement("p");
+  label.className = "suggested-label";
+  label.textContent = "Suggested";
+  container.appendChild(label);
+
+  const list = document.createElement("div");
+  list.className = "suggested-chores-list";
+
+  SUGGESTED_CHORES.forEach(({ description, category }) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "suggested-chore-btn";
+    btn.textContent = description;
+    btn.setAttribute("aria-label", `${description} (${category})`);
+    btn.addEventListener("click", () => addChore(description, category));
+    list.appendChild(btn);
+  });
+
+  container.appendChild(list);
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   if (!isFirebaseConfigured()) {
     showSyncBanner("Add your Firebase config to firebase-config.js");
@@ -385,6 +419,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   renderFilterNav();
+  renderSuggestedChores();
 
   document.getElementById("addChoreForm").addEventListener("submit", async (event) => {
     event.preventDefault();
