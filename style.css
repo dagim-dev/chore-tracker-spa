@@ -368,10 +368,33 @@ button:hover {
   word-break: break-word;
 }
 
+.chore-assignee-block {
+  margin-top: 0.15rem;
+}
+
 .chore-assignee {
   font-size: 0.78rem;
   color: #777;
-  margin-top: 0.15rem;
+  margin: 0;
+}
+
+.chore-assigned-age {
+  font-size: 0.8rem;
+  color: #555;
+  margin: 0.25rem 0 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.chore-assigned-age.overdue,
+.chore-overdue-nudge {
+  color: #c62828;
+  font-weight: 700;
+}
+
+.chore-overdue-nudge {
+  font-size: 0.78rem;
+  margin: 0.15rem 0 0;
 }
 
 .assignment-pending {

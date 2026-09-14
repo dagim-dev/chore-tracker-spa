@@ -37,6 +37,12 @@ python3 -m http.server 8000
 
 Then visit `http://localhost:8000`.
 
+Run rotation logic tests:
+
+```bash
+npm test
+```
+
 ## Deployment (Netlify)
 
 Push to GitHub — Netlify auto-deploys. No build step needed.

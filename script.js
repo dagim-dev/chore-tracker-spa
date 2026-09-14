@@ -1,12 +1,28 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 import { firebaseConfig, HOUSEHOLD_ID } from "./firebase-config.js";
+import {
+  normalizeAssignmentCycle,
+  migrateAssignmentCycleIfNeeded as migrateRotationState,
+  pickNextAssignee,
+  assignDueChoresInOrder
+} from "./assignment-rotation.js";
 
 const ROOMMATES = ["Dagi", "Issac", "Dhruv", "Moutasim"];
 const CATEGORIES = ["Kitchen", "Common Room", "Bathroom", "Other"];
 const SUGGESTED_CHORES = [
   { description: "Empty Dehumidifier", category: "Kitchen" },
   { description: "Take Out Trash (from the house to the outside bin)", category: "Kitchen" },
+  {
+    description:
+      "Take out trash (Roll the bin to the curb for collection day. Check dates posted for collection day on the fridge)",
+    category: "Kitchen"
+  },
+  {
+    description:
+      "Clean kitchen counters and clear trash — Wipe down counters and remove anything that doesn’t belong (e.g. pizza boxes, empty takeout containers, food wrappers, used paper towels).",
+    category: "Kitchen"
+  },
   { description: "Vacuum the Common Room", category: "Common Room" },
   { description: "Clean Dishes", category: "Kitchen" },
   { description: "Vacuum Hallway", category: "Other" },
@@ -14,11 +30,16 @@ const SUGGESTED_CHORES = [
 ];
 const STORAGE_KEY = "choreTrackerData";
 const ASSIGNMENT_CYCLE_KEY = "choreTrackerAssignmentCycle";
-const ASSIGNMENT_DELAY_MS = 20 * 60 * 1000;
+const ASSIGNMENT_DELAY_ENABLED = false;
+const ASSIGNMENT_DELAY_MS = 10 * 60 * 1000;
+const MS_PER_HOUR = 60 * 60 * 1000;
+const MS_PER_DAY = 24 * MS_PER_HOUR;
 
 let chores = [];
+let assignmentCycle = { nextIndex: 0 };
 let activeFilter = "all";
 let householdRef = null;
+let db = null;
 let assignmentTimerId = null;
 
 function isFirebaseConfigured() {
@@ -36,60 +57,64 @@ function hideSyncBanner() {
   document.getElementById("syncBanner").hidden = true;
 }
 
-async function saveData() {
-  if (!householdRef) return;
-  await setDoc(householdRef, { chores });
+function readAssignmentCycle(raw) {
+  const { cycle, migrated } = migrateRotationState(raw);
+  return { cycle, migrated };
 }
 
-function loadAssignmentCycle() {
-  const raw = localStorage.getItem(ASSIGNMENT_CYCLE_KEY);
-  if (!raw) {
-    return { cycleId: 1, eligible: [...ROOMMATES] };
-  }
+async function runHouseholdTransaction(updateFn) {
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(householdRef);
+    if (!snap.exists()) return;
+
+    const data = snap.data() || { chores: [] };
+    const currentChores = (data.chores || []).map(chore => ({ ...chore }));
+    const { cycle: assignmentCycle, migrated } = readAssignmentCycle(data.assignmentCycle);
+
+    const result = updateFn({ currentChores, assignmentCycle, migrated });
+    if (result === false) return;
+
+    transaction.set(
+      householdRef,
+      { chores: currentChores, assignmentCycle },
+      { merge: true }
+    );
+  });
+}
+
+async function ensureRotationSchemaMigrated() {
+  if (!householdRef || !db) return;
 
   try {
-    const data = JSON.parse(raw);
-    return {
-      cycleId: data.cycleId ?? 1,
-      eligible: Array.isArray(data.eligible) ? data.eligible : [...ROOMMATES]
-    };
-  } catch {
-    return { cycleId: 1, eligible: [...ROOMMATES] };
-  }
-}
-
-function saveAssignmentCycle(state) {
-  localStorage.setItem(ASSIGNMENT_CYCLE_KEY, JSON.stringify(state));
-}
-
-function syncEligibleWithRoommates(state) {
-  let eligible = state.eligible.filter(name => ROOMMATES.includes(name));
-
-  if (eligible.length > 0) {
-    ROOMMATES.forEach(name => {
-      if (!eligible.includes(name)) {
-        eligible.push(name);
-      }
+    await runHouseholdTransaction(({ migrated, assignmentCycle }) => {
+      if (!migrated) return false;
+      return true;
     });
+  } catch {
+    showSyncBanner("Could not sync assignment rotation. Try again.");
   }
-
-  return { ...state, eligible };
 }
 
-function pickRandomAssignee() {
-  let state = syncEligibleWithRoommates(loadAssignmentCycle());
+async function migrateAssignmentCycleIfNeeded() {
+  const snap = await getDoc(householdRef);
+  const data = snap.data() || {};
 
-  if (state.eligible.length === 0) {
-    state.cycleId += 1;
-    state.eligible = [...ROOMMATES];
+  if (data.assignmentCycle) {
+    localStorage.removeItem(ASSIGNMENT_CYCLE_KEY);
+    return;
   }
 
-  const index = Math.floor(Math.random() * state.eligible.length);
-  const assignee = state.eligible[index];
-  state.eligible.splice(index, 1);
+  const raw = localStorage.getItem(ASSIGNMENT_CYCLE_KEY);
+  if (raw) {
+    try {
+      const { cycle } = readAssignmentCycle(JSON.parse(raw));
+      await setDoc(householdRef, { assignmentCycle: cycle }, { merge: true });
+    } catch {
+      // ignore invalid local cycle data
+    }
+  }
 
-  saveAssignmentCycle(state);
-  return assignee;
+  localStorage.removeItem(ASSIGNMENT_CYCLE_KEY);
 }
 
 function parseLocalData(raw) {
@@ -123,8 +148,60 @@ async function migrateLocalStorageIfNeeded() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
+function isChoreDueForAssignment(chore, now = Date.now()) {
+  if (chore.assignee) return false;
+  if (!ASSIGNMENT_DELAY_ENABLED) return true;
+  return (chore.assignAt ?? 0) <= now;
+}
+
 function hasPendingAssignments() {
-  return chores.some(chore => !chore.assignee);
+  return chores.some(chore => isChoreDueForAssignment(chore));
+}
+
+function hasLiveAssignedAges() {
+  return chores.some(chore => chore.assignee && chore.status !== "completed");
+}
+
+let backfillAssignedAtPromise = null;
+
+async function backfillMissingAssignedAt() {
+  if (!householdRef) return;
+
+  const needsBackfill = chores.some(
+    chore => chore.assignee && chore.status !== "completed" && !chore.assignedAt
+  );
+  if (!needsBackfill) return;
+
+  const now = Date.now();
+  chores.forEach(chore => {
+    if (chore.assignee && chore.status !== "completed" && !chore.assignedAt) {
+      chore.assignedAt = now;
+    }
+  });
+
+  try {
+    await runHouseholdTransaction(({ currentChores, assignmentCycle }) => {
+      let changed = false;
+      const now = Date.now();
+      currentChores.forEach(chore => {
+        if (chore.assignee && chore.status !== "completed" && !chore.assignedAt) {
+          chore.assignedAt = now;
+          changed = true;
+        }
+      });
+      return changed;
+    });
+    renderChores();
+  } catch {
+    showSyncBanner("Could not save assignment times. Try again.");
+  }
+}
+
+function scheduleBackfillMissingAssignedAt() {
+  if (backfillAssignedAtPromise) return;
+  backfillAssignedAtPromise = backfillMissingAssignedAt().finally(() => {
+    backfillAssignedAtPromise = null;
+  });
 }
 
 function formatAssignmentCountdown(assignAt) {
@@ -134,31 +211,82 @@ function formatAssignmentCountdown(assignAt) {
   return `Assigning in ${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-async function processDueAssignments() {
-  const now = Date.now();
-  const dueChores = chores.filter(chore => !chore.assignee && (chore.assignAt ?? 0) <= now);
-  if (dueChores.length === 0) return;
+function formatAssignedAge(assignedAt) {
+  const elapsed = Math.max(0, Date.now() - assignedAt);
+  const overdue = elapsed > MS_PER_DAY;
 
-  const previousStates = dueChores.map(chore => ({
-    chore,
-    assignAt: chore.assignAt
-  }));
-
-  for (const chore of dueChores) {
-    chore.assignee = pickRandomAssignee();
-    delete chore.assignAt;
+  if (elapsed < MS_PER_HOUR) {
+    const minutes = Math.floor(elapsed / 60000);
+    let text;
+    if (minutes === 0) {
+      text = "Assigned just now";
+    } else if (minutes === 1) {
+      text = "Assigned 1 minute ago";
+    } else {
+      text = `Assigned ${minutes} minutes ago`;
+    }
+    return { text, overdue };
   }
 
+  if (elapsed < MS_PER_DAY) {
+    const hours = Math.floor(elapsed / MS_PER_HOUR);
+    const text = hours === 1 ? "Assigned 1 hour ago" : `Assigned ${hours} hours ago`;
+    return { text, overdue };
+  }
+
+  const days = Math.floor(elapsed / MS_PER_DAY);
+  const text = days === 1 ? "Assigned 1 day ago" : `Assigned ${days} days ago`;
+  return { text, overdue };
+}
+
+function appendAssignedAge(chore, container) {
+  if (chore.status === "completed" || !chore.assignee) return;
+
+  const assignedAt = chore.assignedAt;
+  if (!assignedAt) return;
+
+  const { text, overdue } = formatAssignedAge(assignedAt);
+  const age = document.createElement("p");
+  age.className = overdue ? "chore-assigned-age overdue" : "chore-assigned-age";
+  age.textContent = text;
+  container.appendChild(age);
+
+  if (overdue) {
+    const nudge = document.createElement("p");
+    nudge.className = "chore-overdue-nudge";
+    nudge.textContent = `${chore.assignee} Do your chores!!`;
+    container.appendChild(nudge);
+  }
+}
+
+let assignmentProcessing = false;
+
+async function processDueAssignments() {
+  if (!householdRef || !db) return;
+  if (assignmentProcessing) return;
+
+  const now = Date.now();
+  if (!chores.some(chore => isChoreDueForAssignment(chore, now))) {
+    return;
+  }
+
+  assignmentProcessing = true;
   try {
-    await saveData();
+    await runHouseholdTransaction(({ currentChores, assignmentCycle, migrated }) => {
+      const { cycle: nextCycle, assignedCount } = assignDueChoresInOrder(
+        currentChores,
+        assignmentCycle,
+        now,
+        ASSIGNMENT_DELAY_ENABLED
+      );
+      if (assignedCount === 0 && !migrated) return false;
+      Object.assign(assignmentCycle, nextCycle);
+      return assignedCount > 0 || migrated;
+    });
   } catch {
-    for (const { chore, assignAt } of previousStates) {
-      chore.assignee = null;
-      if (assignAt !== undefined) {
-        chore.assignAt = assignAt;
-      }
-    }
     showSyncBanner("Could not assign chore. Try again.");
+  } finally {
+    assignmentProcessing = false;
   }
 }
 
@@ -166,19 +294,23 @@ function startAssignmentTimer() {
   if (assignmentTimerId) clearInterval(assignmentTimerId);
 
   assignmentTimerId = setInterval(() => {
-    if (!hasPendingAssignments()) return;
-    processDueAssignments();
-    renderChores();
+    if (hasPendingAssignments()) {
+      processDueAssignments();
+    }
+    if (hasPendingAssignments() || hasLiveAssignedAges()) {
+      renderChores();
+    }
   }, 1000);
 }
-
 function subscribeToData() {
   onSnapshot(
     householdRef,
     (snapshot) => {
       const data = snapshot.data() || { chores: [] };
       chores = data.chores || [];
+      assignmentCycle = normalizeAssignmentCycle(data.assignmentCycle);
       hideSyncBanner();
+      scheduleBackfillMissingAssignedAt();
       processDueAssignments();
       renderAll();
     },
@@ -282,20 +414,38 @@ function setFilter(filterValue) {
 }
 
 async function addChore(description, category) {
-  const chore = {
-    id: crypto.randomUUID(),
-    description,
-    category,
-    assignee: null,
-    assignAt: Date.now() + ASSIGNMENT_DELAY_MS,
-    status: "in-progress"
-  };
-  chores.push(chore);
+  const id = crypto.randomUUID();
+  const now = Date.now();
 
   try {
-    await saveData();
+    await runHouseholdTransaction(({ currentChores, assignmentCycle }) => {
+      if (ASSIGNMENT_DELAY_ENABLED) {
+        currentChores.push({
+          id,
+          description,
+          category,
+          assignee: null,
+          assignAt: now + ASSIGNMENT_DELAY_MS,
+          createdAt: now,
+          status: "in-progress"
+        });
+        return true;
+      }
+
+      const result = pickNextAssignee(assignmentCycle);
+      Object.assign(assignmentCycle, result.cycle);
+      currentChores.push({
+        id,
+        description,
+        category,
+        assignee: result.assignee,
+        assignedAt: now,
+        createdAt: now,
+        status: "in-progress"
+      });
+      return true;
+    });
   } catch {
-    chores = chores.filter(item => item.id !== chore.id);
     showSyncBanner("Could not save chore. Try again.");
   }
 }
@@ -304,13 +454,15 @@ async function removeChore(id) {
   const chore = chores.find(c => c.id === id);
   if (!chore || chore.status !== "completed") return;
 
-  const previous = chores;
-  chores = chores.filter(c => c.id !== id);
-
   try {
-    await saveData();
+    await runHouseholdTransaction(({ currentChores }) => {
+      const index = currentChores.findIndex(c => c.id === id);
+      if (index === -1) return false;
+      if (currentChores[index].status !== "completed") return false;
+      currentChores.splice(index, 1);
+      return true;
+    });
   } catch {
-    chores = previous;
     showSyncBanner("Could not remove chore. Try again.");
   }
 }
@@ -319,13 +471,14 @@ async function setChoreStatus(id, status) {
   const chore = chores.find(c => c.id === id);
   if (!chore || chore.status === status) return;
 
-  const previousStatus = chore.status;
-  chore.status = status;
-
   try {
-    await saveData();
+    await runHouseholdTransaction(({ currentChores }) => {
+      const target = currentChores.find(c => c.id === id);
+      if (!target || target.status === status) return false;
+      target.status = status;
+      return true;
+    });
   } catch {
-    chore.status = previousStatus;
     showSyncBanner("Could not update chore. Try again.");
   }
 }
@@ -371,10 +524,18 @@ function renderChores() {
 
     let assignee;
     if (chore.assignee) {
-      assignee = document.createElement("p");
-      assignee.className = "chore-assignee";
-      assignee.textContent = chore.assignee;
-    } else {
+      assignee = document.createElement("div");
+      assignee.className = "chore-assignee-block";
+
+      if (activeFilter === "all") {
+        const nameEl = document.createElement("p");
+        nameEl.className = "chore-assignee";
+        nameEl.textContent = chore.assignee;
+        assignee.appendChild(nameEl);
+      }
+
+      appendAssignedAge(chore, assignee);
+    } else if (ASSIGNMENT_DELAY_ENABLED) {
       assignee = document.createElement("div");
       assignee.className = "assignment-pending";
 
@@ -384,10 +545,13 @@ function renderChores() {
 
       const note = document.createElement("p");
       note.className = "assignment-pending-note";
-      note.textContent = "A random housemate will be assigned a chore at the end of the timer.";
+      note.textContent =
+        "The next person in the house rotation will be assigned when the timer ends (Moutasim → Dhruv → Dagi → Issac).";
 
       assignee.appendChild(timer);
       assignee.appendChild(note);
+    } else {
+      assignee = null;
     }
 
     const statusControls = document.createElement("div");
@@ -422,8 +586,14 @@ function renderChores() {
     }
 
     body.appendChild(description);
-    if (activeFilter === "all") {
-      body.appendChild(assignee);
+    if (assignee) {
+      if (chore.assignee) {
+        if (assignee.childNodes.length > 0) {
+          body.appendChild(assignee);
+        }
+      } else if (activeFilter === "all") {
+        body.appendChild(assignee);
+      }
     }
     body.appendChild(statusControls);
 
@@ -476,11 +646,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   try {
     const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+    db = getFirestore(app);
     householdRef = doc(db, "households", HOUSEHOLD_ID);
 
     await migrateLocalStorageIfNeeded();
-    saveAssignmentCycle(syncEligibleWithRoommates(loadAssignmentCycle()));
+    await migrateAssignmentCycleIfNeeded();
+    await ensureRotationSchemaMigrated();
     subscribeToData();
     startAssignmentTimer();
   } catch {
